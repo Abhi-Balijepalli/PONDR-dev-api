@@ -1,0 +1,212 @@
+# @app.route('/enterprise/request', methods=['POST'])
+# def request_review_guru():
+#     """
+#          request_review_guru(): request analytics through a review guru when a product has been created.
+#     """
+#     now = datetime.now()
+#     try:
+#         id_token = request.headers['Authorization']
+#         claims = auth.verify_id_token(id_token)
+#         uid = claims['uid']
+#         if claims['Enterprise'] is True:
+#             data = request.json['data']
+#             product_id = data['Product_id']
+#             Stock_amount = data['Stock_amount']
+#             colors_offered = data['Colors_offered']
+#             Sizes = data['Sizes']
+#             Target_audience = data['Target_audience'] # this box will be used to figure out what kind of demographic is the product intended for.
+#             review_guru_request_date = datetime.timestamp(now)
+#             price = data['Price']
+#             product_document = PRODUCT.document(Product_id)
+#             product_document.set({
+#                 "Stock_amount": Stock_amount,
+#                 "Colors_offered": colors_offered,
+#                 "Sizes": Sizes,
+#                 "Target_audience": Target_audience,
+#                 "Price": price
+#             }, merge=True)
+#             field_updates = {"review_guru_analytics": True}
+#             product_document.update(field_updates)
+
+#             return jsonify({"success": True}), 200
+#         else:
+#             return jsonify({"success": False}), 404
+
+#     except Exception as e:
+#         return f"An Error Occured: {e}"
+
+
+"""
+@app.route('/enterprise/stripe/subscription', methods=['POST'])
+def create_stripe_subscription():
+   
+        create_stripe_subscription(): This is going to take in a customer ID and charge a specific price to their payment info & start a subscription
+        Amount is in cents.
+    
+    try:
+        # Gets the data about the transaction
+        data = request.json["data"]
+        customer_stripe_id = data["customer_stripe_id"]
+        price_id = data["price_id"]
+
+        # Subscribes the user to the specified price
+        subscription = stripe.Subscription.create(
+            customer=customer_stripe_id,
+            items=[
+                {"price": price_id}
+            ]
+        )
+
+        # Retrieves the invoice URL
+        invoice = stripe.Invoice.retrieve(subscription["latest_invoice"])
+        invoice_url = invoice["invoice_pdf"]
+
+        # Returns success
+        return jsonify({"success": True, 'invoice_url': invoice_url}), 200
+    except Exception as e:
+        return f"An Error Occured: {e}"
+
+
+@app.route('/enterprise/stripe/webhook', methods=['POST'])
+def stripe_webhook():
+    
+        stripe_webhook(): This is the webhook that will be called once a user has either cancelled or successfully paid their subscription plan & will set flags
+        in Firebase to rescrape
+
+    # Gets the event object from Stripe
+    event = None
+    payload = request.data
+    try:
+        event = json.loads(payload)
+    except Exception as e:
+        return jsonify(success=False)
+
+    # Handles the event from Stripe if it is parsed successfully
+    if event and event['type'] == 'payment_intent.succeeded':
+        try:
+            # Fetches the stripe customer ID
+            stripe_customer_id = event['data']['object']['charges']['data'][0]['customer']
+
+            # Retrieves the Firebase document for that specific company corresponding with the stripeID
+            company_query_ref = COMPANY.where(
+                u'stripeID', u'==', stripe_customer_id)
+            document = [doc.to_dict() for doc in company_query_ref.stream()][0]
+            company_id = document["company_id"]
+
+            # Retrieves all productIDs that belong to this specifc company
+            product_query_ref = PRODUCT.where(u"Company_id", u"==", company_id)
+            product_documents = [doc.to_dict()
+                                 for doc in product_query_ref.stream()]
+
+            # Updates all documents with the rescrape flag
+            for product in product_documents:
+                product_id = product["Product_id"]
+                PRODUCT.document(product_id).update({
+                    'rescrape': True
+                })
+
+            return jsonify(success=True)
+        except Exception as e:
+            return jsonify(success=False)
+
+    return event
+"""
+
+
+@app.route('/categories/<cat>', methods=['GET'])
+def get_products_by_category(cat):
+    """
+        get_product_by_category(cat) : get products by their category.
+    """
+    try:
+        query_ref = PRODUCT.where(u'Category', u'==', cat)
+        documents = [doc.to_dict() for doc in query_ref.stream()]
+        return (jsonify({"category_documents": documents}), 200)
+    except Exception as e:
+        return f"An error Occured: {e}"
+
+
+# @app.route('/software-patch', methods=["POST"])
+# def post_software_patch():
+#     """
+#         post_software_patch(): post software patch information and get updated to database
+#     """
+#     now = datetime.now()
+#     try:
+#         data = request.json['data']
+#         key = data['key']
+#         id_stamp = str(datetime.timestamp(now))
+#         if key == "(#z_3mhQ6xo[$B&":
+#             update_patch = LOGS.document('beta_software_patch').collection(
+#                 'public_updates').document(id_stamp)
+#             # date = str(datetime.date(now))
+#             date = data['date']
+#             title = data['title']
+#             updates = data['updates']
+#             update_patch.set({
+#                 "date": date,
+#                 "title": title,
+#                 "updates": updates
+#             })
+#             return jsonify({"success": True}), 200
+#         else:
+#             return (jsonify("You are not authorized to view this page"), 404)
+#     except Exception as e:
+#         return f"An error Occured: {e}"
+
+@app.route('/enterprise/suggestion', methods=['POST'])
+def make_enterprise_suggestion():
+    """
+        make_enterprise_suggestion(): a enterprise can create a suggestion and we can read through them.
+    """
+    now = datetime.now()
+    try:
+        data = request.json['data']
+        comment = data['Comment']
+        date = datetime.timestamp(now)
+        created_by = data['Created_by']
+        created_by_id = data['Created_by_id']
+        category = data['Categories']
+        id_token = request.headers['Authorization']
+        claims = auth.verify_id_token(id_token)
+        if claims['Enterprise'] is True:
+            suggestion_document = SUGGESTION.document(
+                str(date)+str(created_by_id))
+            suggestion_document.set({
+                'Comment': comment,
+                'Created_by': created_by,
+                'Created_by_id': created_by_id,
+                'Tag': "Enterprise",
+                'Date': str(date)
+            })
+            return jsonify({"success": True}), 200
+        else:
+            return(jsonify("We would love your suggestion but you need to create an account first"), 404)
+    except Exception as e:
+        return f"An Error Occured: {e}"
+# # ------- AI Endpoints ----------
+# app.add_url_rule('/demo', view_func=get_demo_analytics())
+# app.add_url_rule('/demo/question', view_func=demo_ai_question())
+# app.add_url_rule('/enterprise/product=<id>/ai', view_func=get_gpt3_data(id))
+# app.add_url_rule('/enterprise/compare/question', view_func=compare_ask_ai_question())
+# app.add_url_rule('/enterprise/product=<id>/question/details', view_func=follow_up_ai_question(id))
+# app.add_url_rule('/enterprise/product=<id>/question/review', view_func=review_question(id))
+# app.add_url_rule('/enterprise/product=<id>/question', view_func=ask_ai_question(id))
+
+# # ------- Payment Endpoints ----------
+# app.add_url_rule('/enterprise/stripe/attach', view_func=attach_payment_to_customer())
+# app.add_url_rule('/enterprise/stripe/subscriptionstatus', view_func=is_customer_subscribed())
+# app.add_url_rule('/enterprise/stripe/payment', view_func=create_stripe_payment())
+# app.add_url_rule('/enterprise/stripe/customer', view_func=get_stripe_customer())
+# app.add_url_rule('/enterprise/stripe/coupon', view_func=get_stripe_coupon())
+# app.add_url_rule('/enterprise/stripe/subscribe', view_func=subscribe_customer())
+
+# # ------- Authentication Endpoint ----------
+# app.add_url_rule('/auth/enterprise', view_func=get_stripe_customer())
+
+# # ------- Product Endpoints ----------
+# app.add_url_rule('/enterprise/products', view_func=get_products_by_company())
+# app.add_url_rule('/enterprise/product=<id>/pin', view_func=pin_product(id))
+# app.add_url_rule('/enterprise/createProduct', view_func=create_product())
+# app.add_url_rule('/enterprise/project/add', view_func=add_product_to_project())
+# app.add_url_rule('/enterprise/reanalyzeProduct', view_func=reanalyze_product())

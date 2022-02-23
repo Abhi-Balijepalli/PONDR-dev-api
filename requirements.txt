@@ -1,0 +1,8 @@
+flask
+requests
+flask_cors
+pandas
+stripe
+firebase_admin
+datetime
+openai
